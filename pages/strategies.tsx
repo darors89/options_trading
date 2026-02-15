@@ -4,6 +4,7 @@ import { useStore } from '@/lib/store';
 import { apiClient } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { STRATEGIES } from '@/lib/constants';
+import type { OptionLeg, StrategyRequest } from '@/lib/types';
 
 export default function StrategiesPage() {
   const {
@@ -63,24 +64,26 @@ export default function StrategiesPage() {
 
     setIsAnalyzing(true);
     try {
-      // Example: Bull Call Spread
-      const request = {
+      // Create properly typed option legs
+      const optionLegs: OptionLeg[] = [
+        {
+          option_type: 'call' as const,
+          position: 'long' as const,
+          strike: formData.strike1,
+          premium: formData.premium1,
+        },
+        {
+          option_type: 'call' as const,
+          position: 'short' as const,
+          strike: formData.strike2,
+          premium: formData.premium2,
+        },
+      ];
+
+      const request: StrategyRequest = {
         strategy_name: selectedStrategy,
         stock_price: formData.stockPrice,
-        option_legs: [
-          {
-            option_type: 'call',
-            position: 'long',
-            strike: formData.strike1,
-            premium: formData.premium1,
-          },
-          {
-            option_type: 'call',
-            position: 'short',
-            strike: formData.strike2,
-            premium: formData.premium2,
-          },
-        ],
+        option_legs: optionLegs,
         stock_legs: [],
         market_params: {
           risk_free_rate: marketParams.risk_free_rate,
