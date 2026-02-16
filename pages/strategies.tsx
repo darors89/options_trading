@@ -3,18 +3,74 @@ import Head from 'next/head';
 import { useStore } from '@/lib/store';
 import { apiClient } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { STRATEGIES } from '@/lib/constants';
 import type { OptionLeg, StrategyRequest } from '@/lib/types';
+
+// Strategy configurations - defines legs for each strategy
+const STRATEGY_CONFIGS: Record<string, {
+  legs: Array<{
+    type: 'call' | 'put';
+    position: 'long' | 'short';
+    label: string;
+    strikeLabel: string;
+  }>;
+  hasStock?: boolean;
+}> = {
+  'Covered Call': {
+    hasStock: true,
+    legs: [{ type: 'call', position: 'short', label: 'Short Call', strikeLabel: 'Call Strike' }],
+  },
+  'Protective Put': {
+    hasStock: true,
+    legs: [{ type: 'put', position: 'long', label: 'Long Put (Protection)', strikeLabel: 'Put Strike' }],
+  },
+  'Bull Call Spread': {
+    legs: [
+      { type: 'call', position: 'long', label: 'Long Call (Lower Strike)', strikeLabel: 'Lower Strike' },
+      { type: 'call', position: 'short', label: 'Short Call (Upper Strike)', strikeLabel: 'Upper Strike' },
+    ],
+  },
+  'Bear Put Spread': {
+    legs: [
+      { type: 'put', position: 'long', label: 'Long Put (Upper Strike)', strikeLabel: 'Upper Strike' },
+      { type: 'put', position: 'short', label: 'Short Put (Lower Strike)', strikeLabel: 'Lower Strike' },
+    ],
+  },
+  'Long Straddle': {
+    legs: [
+      { type: 'call', position: 'long', label: 'Long Call (ATM)', strikeLabel: 'Strike (ATM)' },
+      { type: 'put', position: 'long', label: 'Long Put (ATM)', strikeLabel: 'Strike (ATM)' },
+    ],
+  },
+  'Iron Condor': {
+    legs: [
+      { type: 'put', position: 'long', label: 'Long Put (Lowest)', strikeLabel: 'Lowest Strike' },
+      { type: 'put', position: 'short', label: 'Short Put (Lower)', strikeLabel: 'Lower Strike' },
+      { type: 'call', position: 'short', label: 'Short Call (Upper)', strikeLabel: 'Upper Strike' },
+      { type: 'call', position: 'long', label: 'Long Call (Highest)', strikeLabel: 'Highest Strike' },
+    ],
+  },
+  'Long Call Butterfly': {
+    legs: [
+      { type: 'call', position: 'long', label: 'Long Call (Lower)', strikeLabel: 'Lower Strike' },
+      { type: 'call', position: 'short', label: 'Short Call 1 (Middle)', strikeLabel: 'Middle Strike' },
+      { type: 'call', position: 'short', label: 'Short Call 2 (Middle)', strikeLabel: 'Middle Strike' },
+      { type: 'call', position: 'long', label: 'Long Call (Upper)', strikeLabel: 'Upper Strike' },
+    ],
+  },
+};
+
+// Fallback for strategies not in config
+const getDefaultConfig = () => ({
+  legs: [
+    { type: 'call' as const, position: 'long' as const, label: 'Option 1', strikeLabel: 'Strike 1' },
+    { type: 'call' as const, position: 'short' as const, label: 'Option 2', strikeLabel: 'Strike 2' },
+  ],
+});
 
 export default function StrategiesPage() {
   const {
     selectedStrategy,
     setSelectedStrategy,
-    stockPrice,
-    setStockPrice,
-    optionLegs,
-    addOptionLeg,
-    clearOptionLegs,
     marketParams,
     setMarketParams,
     analysisResult,
@@ -23,38 +79,45 @@ export default function StrategiesPage() {
     setIsAnalyzing,
   } = useStore();
 
-  const [allStrategies, setAllStrategies] = useState<Record<string, string[]>>(STRATEGIES);
-  const [expandedCategories, setExpandedCategories] = useState<string[]>(['basic']);
+  const [activeTab, setActiveTab] = useState('basic');
+  
+  const strategies = {
+    basic: ['Covered Call', 'Protective Put', 'Covered Put', 'Protective Call'],
+    spreads: ['Bull Call Spread', 'Bear Put Spread', 'Bull Put Spread', 'Bear Call Spread'],
+    volatility: ['Long Straddle', 'Short Straddle', 'Long Strangle', 'Short Strangle'],
+    butterflies: ['Long Call Butterfly', 'Long Put Butterfly', 'Iron Butterfly'],
+    condors: ['Iron Condor', 'Long Call Condor', 'Long Put Condor'],
+    advanced: ['Jade Lizard', "Poor Man's Covered Call", 'Wheel Strategy (Put)', 'Collar'],
+  };
 
-  // Form state for simple strategies
-  const [formData, setFormData] = useState({
+  // Common parameters
+  const [commonParams, setCommonParams] = useState({
     stockPrice: 100,
-    strike1: 95,
-    strike2: 105,
-    premium1: 5,
-    premium2: 3,
+    daysToExpiration: 30,
+    volatility: 25,
+    riskFreeRate: 5,
   });
 
+  // Dynamic leg parameters
+  const [legParams, setLegParams] = useState<Array<{ strike: number; premium: number }>>([
+    { strike: 95, premium: 5 },
+    { strike: 105, premium: 3 },
+  ]);
+
+  const currentConfig = selectedStrategy 
+    ? (STRATEGY_CONFIGS[selectedStrategy] || getDefaultConfig())
+    : getDefaultConfig();
+
+  // Adjust leg params when strategy changes
   useEffect(() => {
-    loadStrategies();
-  }, []);
-
-  const loadStrategies = async () => {
-    try {
-      const strategies = await apiClient.listStrategies();
-      setAllStrategies(strategies);
-    } catch (error) {
-      console.error('Error loading strategies:', error);
+    if (selectedStrategy) {
+      const config = STRATEGY_CONFIGS[selectedStrategy] || getDefaultConfig();
+      const newLegParams = config.legs.map((_, idx) => 
+        legParams[idx] || { strike: 100 + idx * 5, premium: 5 - idx }
+      );
+      setLegParams(newLegParams);
     }
-  };
-
-  const toggleCategory = (category: string) => {
-    setExpandedCategories((prev) =>
-      prev.includes(category)
-        ? prev.filter((c) => c !== category)
-        : [...prev, category]
-    );
-  };
+  }, [selectedStrategy]);
 
   const handleAnalyze = async () => {
     if (!selectedStrategy) {
@@ -64,367 +127,298 @@ export default function StrategiesPage() {
 
     setIsAnalyzing(true);
     try {
-      // Create properly typed option legs
-      const optionLegs: OptionLeg[] = [
-        {
-          option_type: 'call' as const,
-          position: 'long' as const,
-          strike: formData.strike1,
-          premium: formData.premium1,
-        },
-        {
-          option_type: 'call' as const,
-          position: 'short' as const,
-          strike: formData.strike2,
-          premium: formData.premium2,
-        },
-      ];
+      const config = STRATEGY_CONFIGS[selectedStrategy] || getDefaultConfig();
+      
+      const optionLegs: OptionLeg[] = config.legs.map((leg, idx) => ({
+        option_type: leg.type,
+        position: leg.position,
+        strike: legParams[idx]?.strike || 100,
+        premium: legParams[idx]?.premium || 5,
+      }));
 
       const request: StrategyRequest = {
         strategy_name: selectedStrategy,
-        stock_price: formData.stockPrice,
+        stock_price: commonParams.stockPrice,
         option_legs: optionLegs,
-        stock_legs: [],
+        stock_legs: config.hasStock ? [{
+          position: 'long' as const,
+          price: commonParams.stockPrice,
+          quantity: 100,
+        }] : [],
         market_params: {
-          risk_free_rate: marketParams.risk_free_rate,
-          volatility: marketParams.volatility,
-          dividend_yield: marketParams.dividend_yield,
-          days_to_expiration: marketParams.days_to_expiration,
+          risk_free_rate: commonParams.riskFreeRate / 100,
+          volatility: commonParams.volatility / 100,
+          dividend_yield: 0,
+          days_to_expiration: commonParams.daysToExpiration,
         },
       };
 
       const result = await apiClient.analyzeStrategy(request);
       setAnalysisResult(result);
-      toast.success('Analysis completed!');
+      toast.success('✓ Analysis completed');
     } catch (error: any) {
       console.error('Analysis error:', error);
-      toast.error('Error analyzing strategy: ' + (error.message || 'Unknown error'));
+      toast.error(error.message || 'Analysis failed');
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const categories = [
-    { key: 'basic', label: 'Básicas', icon: '📚', color: 'bg-green-500' },
-    { key: 'spreads', label: 'Spreads', icon: '📊', color: 'bg-blue-500' },
-    { key: 'volatility', label: 'Volatilidad', icon: '⚡', color: 'bg-yellow-500' },
-    { key: 'butterflies', label: 'Butterflies', icon: '🦋', color: 'bg-purple-500' },
-    { key: 'condors', label: 'Condors', icon: '🦅', color: 'bg-indigo-500' },
-    { key: 'advanced', label: 'Avanzadas', icon: '🚀', color: 'bg-red-500' },
+  const tabs = [
+    { key: 'basic', label: 'Basic', icon: '📚' },
+    { key: 'spreads', label: 'Spreads', icon: '📊' },
+    { key: 'volatility', label: 'Volatility', icon: '⚡' },
+    { key: 'butterflies', label: 'Butterflies', icon: '🦋' },
+    { key: 'condors', label: 'Condors', icon: '🦅' },
+    { key: 'advanced', label: 'Advanced', icon: '🚀' },
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-gray-100">
       <Head>
         <title>Strategy Builder | Options Trading</title>
       </Head>
 
-      {/* SIDEBAR */}
-      <aside className="w-80 bg-white shadow-lg overflow-y-auto border-r border-gray-200">
-        <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-purple-600">
-          <h2 className="text-2xl font-bold text-white">Strategies</h2>
-          <p className="text-blue-100 text-sm">Select to configure</p>
-        </div>
-
-        <div className="p-4">
-          {categories.map((category) => (
-            <div key={category.key} className="mb-2">
-              {/* Category Header */}
+      {/* Header with Tabs */}
+      <header className="bg-slate-900/90 backdrop-blur-sm border-b border-slate-700/50 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200 mb-4">
+            Options Strategy Builder
+          </h1>
+          
+          {/* Strategy Category Tabs */}
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {tabs.map((tab) => (
               <button
-                onClick={() => toggleCategory(category.key)}
-                className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-100 transition-colors"
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-all ${
+                  activeTab === tab.key
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 shadow-lg shadow-amber-500/30'
+                    : 'bg-slate-800/50 text-gray-300 hover:bg-slate-700/50 border border-slate-700'
+                }`}
               >
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">{category.icon}</span>
-                  <span className="font-semibold text-gray-700">{category.label}</span>
-                  <span className="text-xs text-gray-500">
-                    ({allStrategies[category.key]?.length || 0})
-                  </span>
-                </div>
-                <span className="text-gray-400">
-                  {expandedCategories.includes(category.key) ? '▼' : '▶'}
-                </span>
+                <span className="mr-2">{tab.icon}</span>
+                {tab.label}
               </button>
-
-              {/* Strategy List */}
-              {expandedCategories.includes(category.key) && (
-                <div className="ml-4 mt-2 space-y-1">
-                  {allStrategies[category.key]?.map((strategy) => (
-                    <button
-                      key={strategy}
-                      onClick={() => {
-                        setSelectedStrategy(strategy);
-                        toast.success(`Selected: ${strategy}`);
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-all ${
-                        selectedStrategy === strategy
-                          ? 'bg-blue-100 text-blue-700 font-semibold border-l-4 border-blue-500'
-                          : 'text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      {strategy}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </aside>
+      </header>
 
-      {/* MAIN CONTENT */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-5xl mx-auto p-8">
-          {!selectedStrategy ? (
-            // Empty State
-            <div className="text-center py-20">
-              <div className="text-6xl mb-4">👈</div>
-              <h2 className="text-2xl font-bold text-gray-700 mb-2">
-                Select a Strategy
-              </h2>
-              <p className="text-gray-500">
-                Choose a strategy from the sidebar to start analyzing
-              </p>
+      <div className="flex">
+        {/* Main Content - Strategy Selection */}
+        <main className="flex-1 p-6 overflow-y-auto">
+          <div className="max-w-5xl mx-auto">
+            {/* Strategy Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+              {strategies[activeTab as keyof typeof strategies]?.map((strategy) => (
+                <button
+                  key={strategy}
+                  onClick={() => {
+                    setSelectedStrategy(strategy);
+                    toast.success(`Selected: ${strategy}`);
+                  }}
+                  className={`p-4 rounded-xl text-left transition-all ${
+                    selectedStrategy === strategy
+                      ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-slate-900 shadow-xl shadow-amber-500/30 scale-105'
+                      : 'bg-slate-800/40 border border-slate-700 hover:border-amber-500/50 hover:bg-slate-800/60'
+                  }`}
+                >
+                  <div className="font-semibold text-sm">{strategy}</div>
+                </button>
+              ))}
             </div>
-          ) : (
-            // Strategy Builder
-            <div>
-              <div className="mb-8">
-                <h1 className="text-4xl font-bold mb-2">{selectedStrategy}</h1>
-                <p className="text-gray-600">Configure parameters and analyze</p>
-              </div>
 
-              {/* Configuration Form */}
-              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                <h3 className="text-xl font-bold mb-4">Parameters</h3>
+            {/* Analysis Results */}
+            {analysisResult && (
+              <div className="bg-slate-800/40 backdrop-blur-sm rounded-xl p-6 border border-slate-700">
+                <h3 className="text-xl font-bold text-amber-400 mb-4">Analysis Results</h3>
 
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Stock Price */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Stock Price
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.stockPrice}
-                      onChange={(e) =>
-                        setFormData({ ...formData, stockPrice: parseFloat(e.target.value) })
-                      }
-                      className="input"
-                      step="0.01"
-                    />
+                {/* Metrics Grid */}
+                <div className="grid grid-cols-4 gap-4 mb-6">
+                  <div className="bg-gradient-to-br from-slate-700 to-slate-800 p-4 rounded-lg border border-slate-600">
+                    <div className="text-xs text-gray-400 mb-1">Current P&L</div>
+                    <div className={`text-2xl font-bold ${analysisResult.current_pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      ${analysisResult.current_pnl.toFixed(2)}
+                    </div>
                   </div>
 
-                  {/* Strike 1 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Strike 1 (Lower)
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.strike1}
-                      onChange={(e) =>
-                        setFormData({ ...formData, strike1: parseFloat(e.target.value) })
-                      }
-                      className="input"
-                      step="0.01"
-                    />
+                  <div className="bg-gradient-to-br from-emerald-900/30 to-emerald-800/30 p-4 rounded-lg border border-emerald-700/50">
+                    <div className="text-xs text-gray-400 mb-1">Max Profit</div>
+                    <div className="text-2xl font-bold text-emerald-400">
+                      ${analysisResult.max_profit.toFixed(2)}
+                    </div>
                   </div>
 
-                  {/* Premium 1 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Premium 1
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.premium1}
-                      onChange={(e) =>
-                        setFormData({ ...formData, premium1: parseFloat(e.target.value) })
-                      }
-                      className="input"
-                      step="0.01"
-                    />
+                  <div className="bg-gradient-to-br from-red-900/30 to-red-800/30 p-4 rounded-lg border border-red-700/50">
+                    <div className="text-xs text-gray-400 mb-1">Max Loss</div>
+                    <div className="text-2xl font-bold text-red-400">
+                      ${Math.abs(analysisResult.max_loss).toFixed(2)}
+                    </div>
                   </div>
 
-                  {/* Strike 2 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Strike 2 (Upper)
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.strike2}
-                      onChange={(e) =>
-                        setFormData({ ...formData, strike2: parseFloat(e.target.value) })
-                      }
-                      className="input"
-                      step="0.01"
-                    />
-                  </div>
-
-                  {/* Premium 2 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Premium 2
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.premium2}
-                      onChange={(e) =>
-                        setFormData({ ...formData, premium2: parseFloat(e.target.value) })
-                      }
-                      className="input"
-                      step="0.01"
-                    />
-                  </div>
-
-                  {/* Days to Expiration */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Days to Expiration
-                    </label>
-                    <input
-                      type="number"
-                      value={marketParams.days_to_expiration}
-                      onChange={(e) =>
-                        setMarketParams({ days_to_expiration: parseInt(e.target.value) })
-                      }
-                      className="input"
-                    />
-                  </div>
-
-                  {/* Volatility */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Volatility (%)
-                    </label>
-                    <input
-                      type="number"
-                      value={marketParams.volatility * 100}
-                      onChange={(e) =>
-                        setMarketParams({ volatility: parseFloat(e.target.value) / 100 })
-                      }
-                      className="input"
-                      step="1"
-                    />
-                  </div>
-
-                  {/* Risk Free Rate */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Risk Free Rate (%)
-                    </label>
-                    <input
-                      type="number"
-                      value={marketParams.risk_free_rate * 100}
-                      onChange={(e) =>
-                        setMarketParams({ risk_free_rate: parseFloat(e.target.value) / 100 })
-                      }
-                      className="input"
-                      step="0.1"
-                    />
+                  <div className="bg-gradient-to-br from-amber-900/30 to-amber-800/30 p-4 rounded-lg border border-amber-700/50">
+                    <div className="text-xs text-gray-400 mb-1">R/R Ratio</div>
+                    <div className="text-2xl font-bold text-amber-400">
+                      {analysisResult.risk_reward_ratio?.toFixed(2) || 'N/A'}
+                    </div>
                   </div>
                 </div>
 
-                {/* Analyze Button */}
-                <div className="mt-6">
-                  <button
-                    onClick={handleAnalyze}
-                    disabled={isAnalyzing}
-                    className="btn btn-primary w-full py-3 text-lg"
-                  >
-                    {isAnalyzing ? '⏳ Analyzing...' : '📊 Analyze Strategy'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Results */}
-              {analysisResult && (
-                <div className="bg-white rounded-lg shadow-md p-6">
-                  <h3 className="text-xl font-bold mb-4">Analysis Results</h3>
-
-                  {/* Metrics Grid */}
-                  <div className="grid grid-cols-4 gap-4 mb-6">
-                    <div className="bg-blue-50 p-4 rounded-lg">
-                      <div className="text-sm text-gray-600 mb-1">Current P&L</div>
-                      <div
-                        className={`text-2xl font-bold ${
-                          analysisResult.current_pnl >= 0 ? 'text-green-600' : 'text-red-600'
-                        }`}
-                      >
-                        ${analysisResult.current_pnl.toFixed(2)}
+                {/* Greeks */}
+                <div className="mb-6">
+                  <h4 className="font-semibold text-amber-400 mb-3">Greeks</h4>
+                  <div className="grid grid-cols-5 gap-3">
+                    {Object.entries(analysisResult.greeks).map(([key, value]) => (
+                      <div key={key} className="bg-slate-700/50 p-3 rounded-lg border border-slate-600 text-center">
+                        <div className="text-xs text-gray-400 uppercase">{key}</div>
+                        <div className="text-lg font-bold text-cyan-400">{(value as number).toFixed(3)}</div>
                       </div>
-                    </div>
-
-                    <div className="bg-green-50 p-4 rounded-lg">
-                      <div className="text-sm text-gray-600 mb-1">Max Profit</div>
-                      <div className="text-2xl font-bold text-green-600">
-                        ${analysisResult.max_profit.toFixed(2)}
-                      </div>
-                    </div>
-
-                    <div className="bg-red-50 p-4 rounded-lg">
-                      <div className="text-sm text-gray-600 mb-1">Max Loss</div>
-                      <div className="text-2xl font-bold text-red-600">
-                        ${Math.abs(analysisResult.max_loss).toFixed(2)}
-                      </div>
-                    </div>
-
-                    <div className="bg-purple-50 p-4 rounded-lg">
-                      <div className="text-sm text-gray-600 mb-1">R/R Ratio</div>
-                      <div className="text-2xl font-bold text-purple-600">
-                        {analysisResult.risk_reward_ratio?.toFixed(2) || 'N/A'}
-                      </div>
-                    </div>
+                    ))}
                   </div>
+                </div>
 
-                  {/* Greeks */}
-                  <div className="mb-6">
-                    <h4 className="font-semibold mb-3">Greeks</h4>
-                    <div className="grid grid-cols-5 gap-3">
-                      {Object.entries(analysisResult.greeks).map(([key, value]) => (
-                        <div key={key} className="bg-gray-50 p-3 rounded text-center">
-                          <div className="text-xs text-gray-600 uppercase">{key}</div>
-                          <div className="text-lg font-bold">{(value as number).toFixed(3)}</div>
+                {/* Break-evens */}
+                {analysisResult.break_evens && analysisResult.break_evens.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-amber-400 mb-3">Break-even Points</h4>
+                    <div className="flex gap-3">
+                      {analysisResult.break_evens.map((be, idx) => (
+                        <div key={idx} className="bg-amber-900/20 px-4 py-2 rounded-lg border border-amber-700/50">
+                          <span className="text-sm text-gray-400">BE #{idx + 1}: </span>
+                          <span className="font-bold text-amber-400">${be.toFixed(2)}</span>
                         </div>
                       ))}
                     </div>
                   </div>
+                )}
+              </div>
+            )}
+          </div>
+        </main>
 
-                  {/* Break-evens */}
-                  {analysisResult.break_evens && analysisResult.break_evens.length > 0 && (
-                    <div>
-                      <h4 className="font-semibold mb-3">Break-even Points</h4>
-                      <div className="flex gap-3">
-                        {analysisResult.break_evens.map((be, idx) => (
-                          <div key={idx} className="bg-yellow-50 px-4 py-2 rounded">
-                            <span className="text-sm text-gray-600">BE #{idx + 1}: </span>
-                            <span className="font-bold">${be.toFixed(2)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+        {/* Sidebar - Configuration */}
+        <aside className="w-96 bg-slate-800/60 backdrop-blur-sm border-l border-slate-700 p-6 overflow-y-auto">
+          {!selectedStrategy ? (
+            <div className="text-center py-20 text-gray-500">
+              <div className="text-4xl mb-3">👈</div>
+              <p>Select a strategy to configure</p>
+            </div>
+          ) : (
+            <div>
+              <h2 className="text-xl font-bold text-amber-400 mb-2">{selectedStrategy}</h2>
+              <p className="text-sm text-gray-400 mb-6">Configure parameters</p>
 
-                  {/* Simple Payoff Visualization */}
-                  <div className="mt-6">
-                    <h4 className="font-semibold mb-3">Payoff Diagram</h4>
-                    <div className="bg-gray-100 p-4 rounded">
-                      <p className="text-sm text-gray-600">
-                        Payoff data received. Add Recharts component here for visualization.
-                      </p>
-                      <p className="text-xs text-gray-500 mt-2">
-                        Data points: {analysisResult.payoff_data.stock_prices.length}
-                      </p>
-                    </div>
+              {/* Common Parameters */}
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-amber-400 mb-3 uppercase tracking-wider">
+                  Market Parameters
+                </h3>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Stock Price</label>
+                    <input
+                      type="number"
+                      value={commonParams.stockPrice}
+                      onChange={(e) => setCommonParams({ ...commonParams, stockPrice: parseFloat(e.target.value) })}
+                      className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:border-amber-500 focus:outline-none"
+                      step="0.01"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Days to Expiration</label>
+                    <input
+                      type="number"
+                      value={commonParams.daysToExpiration}
+                      onChange={(e) => setCommonParams({ ...commonParams, daysToExpiration: parseInt(e.target.value) })}
+                      className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Volatility (%)</label>
+                    <input
+                      type="number"
+                      value={commonParams.volatility}
+                      onChange={(e) => setCommonParams({ ...commonParams, volatility: parseFloat(e.target.value) })}
+                      className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:border-amber-500 focus:outline-none"
+                      step="1"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Risk-Free Rate (%)</label>
+                    <input
+                      type="number"
+                      value={commonParams.riskFreeRate}
+                      onChange={(e) => setCommonParams({ ...commonParams, riskFreeRate: parseFloat(e.target.value) })}
+                      className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:border-amber-500 focus:outline-none"
+                      step="0.1"
+                    />
                   </div>
                 </div>
-              )}
+              </div>
+
+              {/* Option Legs */}
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-amber-400 mb-3 uppercase tracking-wider">
+                  Option Legs
+                </h3>
+
+                {currentConfig.legs.map((leg, idx) => (
+                  <div key={idx} className="mb-4 p-4 bg-slate-900/50 border border-slate-700 rounded-lg">
+                    <h4 className="text-sm font-semibold text-cyan-400 mb-3">{leg.label}</h4>
+                    
+                    <div className="space-y-2">
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">{leg.strikeLabel}</label>
+                        <input
+                          type="number"
+                          value={legParams[idx]?.strike || 100}
+                          onChange={(e) => {
+                            const newParams = [...legParams];
+                            newParams[idx] = { ...newParams[idx], strike: parseFloat(e.target.value) };
+                            setLegParams(newParams);
+                          }}
+                          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white focus:border-cyan-500 focus:outline-none text-sm"
+                          step="0.01"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Premium</label>
+                        <input
+                          type="number"
+                          value={legParams[idx]?.premium || 5}
+                          onChange={(e) => {
+                            const newParams = [...legParams];
+                            newParams[idx] = { ...newParams[idx], premium: parseFloat(e.target.value) };
+                            setLegParams(newParams);
+                          }}
+                          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white focus:border-cyan-500 focus:outline-none text-sm"
+                          step="0.01"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Analyze Button */}
+              <button
+                onClick={handleAnalyze}
+                disabled={isAnalyzing}
+                className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-900 font-bold rounded-lg shadow-lg shadow-amber-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                {isAnalyzing ? '⏳ Analyzing...' : '📊 Analyze Strategy'}
+              </button>
             </div>
           )}
-        </div>
-      </main>
+        </aside>
+      </div>
     </div>
   );
 }
