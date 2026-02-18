@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import { useStore } from '@/lib/store';
 import { apiClient } from '@/lib/api';
 import { analyzeStrategyOffline, type OfflineLeg } from '@/lib/blackscholes';
+import PayoffChart from '@/components/PayoffChart';
+import VolatilitySurface from '@/components/VolatilitySurface';
 import toast from 'react-hot-toast';
 import type { OptionLeg, StrategyRequest } from '@/lib/types';
 
@@ -48,6 +51,14 @@ const STRATEGY_CONFIGS: Record<string, {
       { type: 'put', position: 'short', label: 'Short Put', strikeLabel: 'Lower' },
       { type: 'call', position: 'short', label: 'Short Call', strikeLabel: 'Upper' },
       { type: 'call', position: 'long', label: 'Long Call (Highest)', strikeLabel: 'Highest' },
+    ],
+  },
+  'Long Call Butterfly': {
+    legs: [
+      { type: 'call', position: 'long', label: 'Long Call (Lower)', strikeLabel: 'Lower' },
+      { type: 'call', position: 'short', label: 'Short Call 1 (Mid)', strikeLabel: 'Middle' },
+      { type: 'call', position: 'short', label: 'Short Call 2 (Mid)', strikeLabel: 'Middle' },
+      { type: 'call', position: 'long', label: 'Long Call (Upper)', strikeLabel: 'Upper' },
     ],
   },
 };
@@ -177,7 +188,6 @@ export default function StrategiesPage() {
       setServerError(errorMsg);
       toast.error(errorMsg);
       
-      // If online mode fails, suggest offline mode
       if (isOnlineMode) {
         toast('💡 Try Offline Mode for instant analysis', { duration: 5000 });
       }
@@ -201,12 +211,20 @@ export default function StrategiesPage() {
         <title>Options Strategy Builder</title>
       </Head>
 
-      {/* Minimal Header */}
+      {/* Header */}
       <header className="border-b border-blue-900/30 bg-[#0d1135]/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-light text-blue-100">
-            Options Strategy Builder
-          </h1>
+          <div className="flex items-center gap-6">
+            <h1 className="text-xl font-light text-blue-100">
+              Options Strategy Builder
+            </h1>
+            <Link href="/" className="text-sm text-gray-400 hover:text-gray-300">
+              Home
+            </Link>
+            <Link href="/settings" className="text-sm text-gray-400 hover:text-gray-300">
+              ⚙️ Settings
+            </Link>
+          </div>
 
           {/* Online/Offline Toggle */}
           <div className="flex items-center gap-3">
@@ -231,7 +249,7 @@ export default function StrategiesPage() {
           </div>
         </div>
 
-        {/* Minimal Tabs */}
+        {/* Tabs */}
         <div className="max-w-7xl mx-auto px-6 pb-3">
           <div className="flex gap-1">
             {tabs.map((tab) => (
@@ -253,9 +271,9 @@ export default function StrategiesPage() {
 
       <div className="flex">
         {/* Main Area */}
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-6 overflow-y-auto">
           <div className="max-w-5xl mx-auto">
-            {/* Minimal Strategy Grid */}
+            {/* Strategy Grid */}
             <div className="grid grid-cols-4 gap-2 mb-6">
               {strategies[activeTab as keyof typeof strategies]?.map((strategy) => (
                 <button
@@ -275,75 +293,97 @@ export default function StrategiesPage() {
               ))}
             </div>
 
-            {/* Results */}
+            {/* Results with Charts */}
             {analysisResult && (
-              <div className="bg-[#0d1135]/40 border border-blue-900/30 rounded p-6">
-                <h3 className="text-lg font-light text-blue-200 mb-4">Results</h3>
+              <div className="space-y-6">
+                {/* Metrics Grid */}
+                <div className="bg-[#0d1135]/40 border border-blue-900/30 rounded p-6">
+                  <h3 className="text-lg font-light text-blue-200 mb-4">Results</h3>
 
-                {/* Metrics */}
-                <div className="grid grid-cols-4 gap-3 mb-6">
-                  <div className="bg-[#0a0e27] p-3 rounded border border-blue-900/20">
-                    <div className="text-xs text-gray-500 mb-1">P&L</div>
-                    <div className={`text-xl font-light ${analysisResult.current_pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                      ${analysisResult.current_pnl.toFixed(2)}
-                    </div>
-                  </div>
-
-                  <div className="bg-[#0a0e27] p-3 rounded border border-emerald-900/20">
-                    <div className="text-xs text-gray-500 mb-1">Max Profit</div>
-                    <div className="text-xl font-light text-emerald-400">
-                      ${analysisResult.max_profit.toFixed(2)}
-                    </div>
-                  </div>
-
-                  <div className="bg-[#0a0e27] p-3 rounded border border-red-900/20">
-                    <div className="text-xs text-gray-500 mb-1">Max Loss</div>
-                    <div className="text-xl font-light text-red-400">
-                      ${Math.abs(analysisResult.max_loss).toFixed(2)}
-                    </div>
-                  </div>
-
-                  <div className="bg-[#0a0e27] p-3 rounded border border-blue-900/20">
-                    <div className="text-xs text-gray-500 mb-1">R/R</div>
-                    <div className="text-xl font-light text-blue-300">
-                      {analysisResult.risk_reward_ratio?.toFixed(2) || '—'}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Greeks - Compact */}
-                <div className="mb-6">
-                  <div className="text-sm text-gray-400 mb-2">Greeks</div>
-                  <div className="grid grid-cols-5 gap-2">
-                    {Object.entries(analysisResult.greeks).map(([key, value]) => (
-                      <div key={key} className="bg-[#0a0e27] p-2 rounded border border-blue-900/20 text-center">
-                        <div className="text-xs text-gray-500 uppercase">{key}</div>
-                        <div className="text-sm font-light text-blue-200">{(value as number).toFixed(3)}</div>
+                  <div className="grid grid-cols-4 gap-3 mb-6">
+                    <div className="bg-[#0a0e27] p-3 rounded border border-blue-900/20">
+                      <div className="text-xs text-gray-500 mb-1">P&L</div>
+                      <div className={`text-xl font-light ${analysisResult.current_pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        ${analysisResult.current_pnl.toFixed(2)}
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    </div>
 
-                {/* Break-evens */}
-                {analysisResult.break_evens && analysisResult.break_evens.length > 0 && (
-                  <div>
-                    <div className="text-sm text-gray-400 mb-2">Break-even</div>
-                    <div className="flex gap-2">
-                      {analysisResult.break_evens.map((be, idx) => (
-                        <div key={idx} className="bg-[#0a0e27] px-3 py-1 rounded border border-blue-900/20">
-                          <span className="text-xs text-gray-500">BE {idx + 1}: </span>
-                          <span className="text-sm font-light text-blue-200">${be.toFixed(2)}</span>
+                    <div className="bg-[#0a0e27] p-3 rounded border border-emerald-900/20">
+                      <div className="text-xs text-gray-500 mb-1">Max Profit</div>
+                      <div className="text-xl font-light text-emerald-400">
+                        ${analysisResult.max_profit.toFixed(2)}
+                      </div>
+                    </div>
+
+                    <div className="bg-[#0a0e27] p-3 rounded border border-red-900/20">
+                      <div className="text-xs text-gray-500 mb-1">Max Loss</div>
+                      <div className="text-xl font-light text-red-400">
+                        ${Math.abs(analysisResult.max_loss).toFixed(2)}
+                      </div>
+                    </div>
+
+                    <div className="bg-[#0a0e27] p-3 rounded border border-blue-900/20">
+                      <div className="text-xs text-gray-500 mb-1">R/R</div>
+                      <div className="text-xl font-light text-blue-300">
+                        {analysisResult.risk_reward_ratio?.toFixed(2) || '—'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Greeks */}
+                  <div className="mb-6">
+                    <div className="text-sm text-gray-400 mb-2">Greeks</div>
+                    <div className="grid grid-cols-5 gap-2">
+                      {Object.entries(analysisResult.greeks).map(([key, value]) => (
+                        <div key={key} className="bg-[#0a0e27] p-2 rounded border border-blue-900/20 text-center">
+                          <div className="text-xs text-gray-500 uppercase">{key}</div>
+                          <div className="text-sm font-light text-blue-200">{(value as number).toFixed(3)}</div>
                         </div>
                       ))}
                     </div>
                   </div>
-                )}
+
+                  {/* Break-evens */}
+                  {analysisResult.break_evens && analysisResult.break_evens.length > 0 && (
+                    <div>
+                      <div className="text-sm text-gray-400 mb-2">Break-even</div>
+                      <div className="flex gap-2">
+                        {analysisResult.break_evens.map((be, idx) => (
+                          <div key={idx} className="bg-[#0a0e27] px-3 py-1 rounded border border-blue-900/20">
+                            <span className="text-xs text-gray-500">BE {idx + 1}: </span>
+                            <span className="text-sm font-light text-blue-200">${be.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Payoff Chart */}
+                <PayoffChart
+                  analysis={analysisResult}
+                  stockPrice={commonParams.stockPrice}
+                  strategyName={selectedStrategy || 'Strategy'}
+                  legs={currentConfig.legs.map((leg, idx) => ({
+                    type: leg.type,
+                    position: leg.position,
+                    strike: legParams[idx]?.strike || 100,
+                    premium: legParams[idx]?.premium || 5,
+                  }))}
+                />
+
+                {/* Volatility Surface */}
+                <VolatilitySurface
+                  legs={legParams.map(p => ({ strike: p.strike, premium: p.premium }))}
+                  stockPrice={commonParams.stockPrice}
+                  currentDTE={commonParams.daysToExpiration}
+                />
               </div>
             )}
           </div>
         </main>
 
-        {/* Minimal Sidebar */}
+        {/* Sidebar */}
         <aside className="w-80 bg-[#0d1135]/60 border-l border-blue-900/30 p-6 overflow-y-auto">
           {!selectedStrategy ? (
             <div className="text-center py-20 text-gray-500">
@@ -460,9 +500,9 @@ export default function StrategiesPage() {
               <div className="mt-4 p-3 bg-blue-900/10 border border-blue-900/30 rounded">
                 <p className="text-xs text-gray-400">
                   {isOnlineMode ? (
-                    <>⚡ Online mode: Using backend API for calculations</>
+                    <>⚡ Online mode: Using backend API</>
                   ) : (
-                    <>🔒 Offline mode: Calculations run in your browser. No data sent to server.</>
+                    <>🔒 Offline mode: Calculations in browser</>
                   )}
                 </p>
               </div>
