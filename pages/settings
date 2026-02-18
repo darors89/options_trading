@@ -1,0 +1,437 @@
+// pages/settings.tsx
+import { useState, useEffect } from 'react';
+import Head from 'next/head';
+import { useRouter } from 'next/router';
+import toast from 'react-hot-toast';
+
+interface Credentials {
+  broker: 'rofex' | 'homebroker' | 'none';
+  rofex?: {
+    user: string;
+    password: string;
+    account: string;
+    environment: 'REMARKET' | 'LIVE';
+  };
+  homebroker?: {
+    brokerId: string;
+    user: string;
+    password: string;
+    dni: string;
+  };
+}
+
+export default function SettingsPage() {
+  const router = useRouter();
+  const [broker, setBroker] = useState<'rofex' | 'homebroker' | 'none'>('none');
+  const [isConnected, setIsConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  
+  // Rofex credentials
+  const [rofexCreds, setRofexCreds] = useState({
+    user: '',
+    password: '',
+    account: '',
+    environment: 'REMARKET' as const,
+  });
+
+  // Homebroker credentials
+  const [homebrokerCreds, setHomebrokerCreds] = useState({
+    brokerId: '11',
+    user: '',
+    password: '',
+    dni: '',
+  });
+
+  const brokerNames: Record<string, string> = {
+    '11': 'Balanz',
+    '12': 'Bull Market',
+    '124': 'Cohen',
+    '125': 'Comafi',
+    '121': 'Invertir Online',
+    '127': 'Itaú',
+    '134': 'Portfolio Personal',
+  };
+
+  // Load saved connection status on mount
+  useEffect(() => {
+    const savedBroker = localStorage.getItem('broker') as 'rofex' | 'homebroker' | null;
+    const connected = localStorage.getItem('connected') === 'true';
+    
+    if (savedBroker) {
+      setBroker(savedBroker);
+      setIsConnected(connected);
+    }
+  }, []);
+
+  const handleConnect = async () => {
+    setIsConnecting(true);
+    
+    try {
+      let endpoint = '';
+      let body = {};
+
+      if (broker === 'rofex') {
+        endpoint = '/api/auth/rofex/login';
+        body = {
+          user: rofexCreds.user,
+          password: rofexCreds.password,
+          account: rofexCreds.account,
+          environment: rofexCreds.environment,
+        };
+      } else if (broker === 'homebroker') {
+        endpoint = '/api/auth/homebroker/login';
+        body = {
+          brokerId: homebrokerCreds.brokerId,
+          user: homebrokerCreds.user,
+          password: homebrokerCreds.password,
+          dni: homebrokerCreds.dni,
+        };
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Save connection status (NOT credentials!)
+        localStorage.setItem('broker', broker);
+        localStorage.setItem('connected', 'true');
+        localStorage.setItem('connectedAt', new Date().toISOString());
+        
+        setIsConnected(true);
+        toast.success(`✓ Connected to ${broker === 'rofex' ? 'Rofex' : brokerNames[homebrokerCreds.brokerId]}`);
+        
+        // Optionally redirect to strategies
+        // router.push('/strategies');
+      } else {
+        const error = await response.json();
+        toast.error(`Connection failed: ${error.detail || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      console.error('Connection error:', error);
+      toast.error('Connection error. Make sure backend is running.');
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleDisconnect = () => {
+    localStorage.removeItem('broker');
+    localStorage.removeItem('connected');
+    localStorage.removeItem('connectedAt');
+    setIsConnected(false);
+    toast.success('Disconnected');
+  };
+
+  const handleTestConnection = async () => {
+    try {
+      const response = await fetch('/api/health');
+      if (response.ok) {
+        toast.success('✓ Backend is reachable');
+      } else {
+        toast.error('Backend returned error');
+      }
+    } catch (error) {
+      toast.error('Cannot reach backend. Use Offline Mode.');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#0a0e27] text-gray-100">
+      <Head>
+        <title>Settings | Options Platform</title>
+      </Head>
+
+      {/* Header */}
+      <header className="border-b border-blue-900/30 bg-[#0d1135]/80 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <h1 className="text-xl font-light text-blue-100">Settings</h1>
+          <button
+            onClick={() => router.push('/strategies')}
+            className="text-sm text-gray-400 hover:text-gray-300"
+          >
+            ← Back to Strategies
+          </button>
+        </div>
+      </header>
+
+      <main className="max-w-3xl mx-auto p-6">
+        {/* Connection Status */}
+        <div className="bg-[#0d1135]/60 border border-blue-900/30 rounded-lg p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-light text-blue-200">Connection Status</h2>
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-gray-500'}`} />
+              <span className="text-sm text-gray-400">
+                {isConnected ? 'Connected' : 'Disconnected'}
+              </span>
+            </div>
+          </div>
+
+          {isConnected && (
+            <div className="bg-emerald-900/20 border border-emerald-900/30 rounded p-4 mb-4">
+              <p className="text-sm text-emerald-400 mb-2">
+                ✓ Connected to {broker === 'rofex' ? 'Rofex' : brokerNames[homebrokerCreds.brokerId]}
+              </p>
+              <button
+                onClick={handleDisconnect}
+                className="text-xs text-gray-400 hover:text-gray-300 underline"
+              >
+                Disconnect
+              </button>
+            </div>
+          )}
+
+          <p className="text-sm text-gray-400 mb-4">
+            Connect to your broker to access real-time market data and option chains.
+            Or use <span className="text-blue-400">Offline Mode</span> without connection.
+          </p>
+
+          <button
+            onClick={handleTestConnection}
+            className="text-sm text-gray-400 hover:text-gray-300 underline"
+          >
+            Test Backend Connection
+          </button>
+        </div>
+
+        {/* Broker Selection */}
+        {!isConnected && (
+          <>
+            <div className="bg-[#0d1135]/60 border border-blue-900/30 rounded-lg p-6 mb-6">
+              <h2 className="text-lg font-light text-blue-200 mb-4">Broker</h2>
+              
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  onClick={() => setBroker('none')}
+                  className={`p-4 rounded-lg border transition-all ${
+                    broker === 'none'
+                      ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                      : 'bg-[#0a0e27] border-blue-900/30 text-gray-400 hover:border-blue-700/50'
+                  }`}
+                >
+                  <div className="text-2xl mb-2">🔒</div>
+                  <div className="text-sm font-medium">Offline</div>
+                  <div className="text-xs text-gray-500 mt-1">No connection</div>
+                </button>
+
+                <button
+                  onClick={() => setBroker('rofex')}
+                  className={`p-4 rounded-lg border transition-all ${
+                    broker === 'rofex'
+                      ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                      : 'bg-[#0a0e27] border-blue-900/30 text-gray-400 hover:border-blue-700/50'
+                  }`}
+                >
+                  <div className="text-2xl mb-2">📊</div>
+                  <div className="text-sm font-medium">Rofex</div>
+                  <div className="text-xs text-gray-500 mt-1">Derivatives</div>
+                </button>
+
+                <button
+                  onClick={() => setBroker('homebroker')}
+                  className={`p-4 rounded-lg border transition-all ${
+                    broker === 'homebroker'
+                      ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                      : 'bg-[#0a0e27] border-blue-900/30 text-gray-400 hover:border-blue-700/50'
+                  }`}
+                >
+                  <div className="text-2xl mb-2">🏦</div>
+                  <div className="text-sm font-medium">Homebroker</div>
+                  <div className="text-xs text-gray-500 mt-1">Equities</div>
+                </button>
+              </div>
+            </div>
+
+            {/* Rofex Form */}
+            {broker === 'rofex' && (
+              <div className="bg-[#0d1135]/60 border border-blue-900/30 rounded-lg p-6">
+                <h2 className="text-lg font-light text-blue-200 mb-4">Rofex Credentials</h2>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">User</label>
+                    <input
+                      type="text"
+                      value={rofexCreds.user}
+                      onChange={(e) => setRofexCreds({ ...rofexCreds, user: e.target.value })}
+                      className="input"
+                      placeholder="Your Rofex user"
+                      autoComplete="username"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Password</label>
+                    <input
+                      type="password"
+                      value={rofexCreds.password}
+                      onChange={(e) => setRofexCreds({ ...rofexCreds, password: e.target.value })}
+                      className="input"
+                      placeholder="Your Rofex password"
+                      autoComplete="current-password"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Account</label>
+                    <input
+                      type="text"
+                      value={rofexCreds.account}
+                      onChange={(e) => setRofexCreds({ ...rofexCreds, account: e.target.value })}
+                      className="input"
+                      placeholder="Account number"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Environment</label>
+                    <select
+                      value={rofexCreds.environment}
+                      onChange={(e) => setRofexCreds({ ...rofexCreds, environment: e.target.value as 'REMARKET' | 'LIVE' })}
+                      className="input"
+                    >
+                      <option value="REMARKET">Remarket (Demo)</option>
+                      <option value="LIVE">Live</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleConnect}
+                  disabled={isConnecting || !rofexCreds.user || !rofexCreds.password || !rofexCreds.account}
+                  className="btn-primary w-full mt-6"
+                >
+                  {isConnecting ? 'Connecting...' : 'Connect to Rofex'}
+                </button>
+
+                <p className="text-xs text-gray-500 mt-3">
+                  🔒 Credentials are sent directly to the backend and not stored in browser.
+                </p>
+              </div>
+            )}
+
+            {/* Homebroker Form */}
+            {broker === 'homebroker' && (
+              <div className="bg-[#0d1135]/60 border border-blue-900/30 rounded-lg p-6">
+                <h2 className="text-lg font-light text-blue-200 mb-4">Homebroker Credentials</h2>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Broker</label>
+                    <select
+                      value={homebrokerCreds.brokerId}
+                      onChange={(e) => setHomebrokerCreds({ ...homebrokerCreds, brokerId: e.target.value })}
+                      className="input"
+                    >
+                      <option value="11">Balanz</option>
+                      <option value="12">Bull Market</option>
+                      <option value="124">Cohen</option>
+                      <option value="125">Comafi</option>
+                      <option value="121">Invertir Online</option>
+                      <option value="127">Itaú</option>
+                      <option value="134">Portfolio Personal</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">User</label>
+                    <input
+                      type="text"
+                      value={homebrokerCreds.user}
+                      onChange={(e) => setHomebrokerCreds({ ...homebrokerCreds, user: e.target.value })}
+                      className="input"
+                      placeholder="Your username"
+                      autoComplete="username"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Password</label>
+                    <input
+                      type="password"
+                      value={homebrokerCreds.password}
+                      onChange={(e) => setHomebrokerCreds({ ...homebrokerCreds, password: e.target.value })}
+                      className="input"
+                      placeholder="Your password"
+                      autoComplete="current-password"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">DNI</label>
+                    <input
+                      type="text"
+                      value={homebrokerCreds.dni}
+                      onChange={(e) => setHomebrokerCreds({ ...homebrokerCreds, dni: e.target.value })}
+                      className="input"
+                      placeholder="Your DNI"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleConnect}
+                  disabled={isConnecting || !homebrokerCreds.user || !homebrokerCreds.password || !homebrokerCreds.dni}
+                  className="btn-primary w-full mt-6"
+                >
+                  {isConnecting ? 'Connecting...' : `Connect to ${brokerNames[homebrokerCreds.brokerId]}`}
+                </button>
+
+                <p className="text-xs text-gray-500 mt-3">
+                  🔒 Credentials are sent directly to the backend and not stored in browser.
+                </p>
+              </div>
+            )}
+
+            {/* Offline Mode */}
+            {broker === 'none' && (
+              <div className="bg-[#0d1135]/60 border border-blue-900/30 rounded-lg p-6">
+                <h2 className="text-lg font-light text-blue-200 mb-4">Offline Mode</h2>
+                
+                <div className="bg-blue-900/20 border border-blue-900/30 rounded p-4 mb-4">
+                  <p className="text-sm text-blue-300 mb-2">
+                    ✓ No connection required
+                  </p>
+                  <ul className="text-xs text-gray-400 space-y-1">
+                    <li>• Calculations run in your browser</li>
+                    <li>• Full Black-Scholes engine</li>
+                    <li>• All Greeks computed</li>
+                    <li>• Instant results</li>
+                    <li>• No market data needed</li>
+                  </ul>
+                </div>
+
+                <button
+                  onClick={() => router.push('/strategies')}
+                  className="btn-primary w-full"
+                >
+                  Continue with Offline Mode
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Security Notice */}
+        <div className="bg-amber-900/10 border border-amber-900/30 rounded-lg p-4 mt-6">
+          <div className="flex gap-3">
+            <div className="text-2xl">🔐</div>
+            <div>
+              <h3 className="text-sm font-medium text-amber-400 mb-1">Security</h3>
+              <p className="text-xs text-gray-400">
+                Your credentials are transmitted securely and only stored in the backend session.
+                They are never saved in your browser or localStorage.
+                The connection is maintained only for the current session.
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
