@@ -48,7 +48,7 @@ export default function SettingsPage() {
     '124': 'Cohen',
     '125': 'Comafi',
     '121': 'Invertir Online',
-    '127': 'Itaú',
+    '127': 'ItaÃº',
     '134': 'Portfolio Personal',
   };
 
@@ -103,7 +103,7 @@ export default function SettingsPage() {
         localStorage.setItem('connectedAt', new Date().toISOString());
         
         setIsConnected(true);
-        toast.success(`✓ Connected to ${broker === 'rofex' ? 'Rofex' : brokerNames[homebrokerCreds.brokerId]}`);
+        toast.success(`âœ“ Connected to ${broker === 'rofex' ? 'Rofex' : brokerNames[homebrokerCreds.brokerId]}`);
         
         // Optionally redirect to strategies
         // router.push('/strategies');
@@ -131,7 +131,7 @@ export default function SettingsPage() {
     try {
       const response = await fetch('/api/health');
       if (response.ok) {
-        toast.success('✓ Backend is reachable');
+        toast.success('âœ“ Backend is reachable');
       } else {
         toast.error('Backend returned error');
       }
@@ -154,7 +154,7 @@ export default function SettingsPage() {
             onClick={() => router.push('/strategies')}
             className="text-sm text-gray-400 hover:text-gray-300"
           >
-            ← Back to Strategies
+            â† Back to Strategies
           </button>
         </div>
       </header>
@@ -175,7 +175,7 @@ export default function SettingsPage() {
           {isConnected && (
             <div className="bg-emerald-900/20 border border-emerald-900/30 rounded p-4 mb-4">
               <p className="text-sm text-emerald-400 mb-2">
-                ✓ Connected to {broker === 'rofex' ? 'Rofex' : brokerNames[homebrokerCreds.brokerId]}
+                âœ“ Connected to {broker === 'rofex' ? 'Rofex' : brokerNames[homebrokerCreds.brokerId]}
               </p>
               <button
                 onClick={handleDisconnect}
@@ -214,7 +214,7 @@ export default function SettingsPage() {
                       : 'bg-[#0a0e27] border-blue-900/30 text-gray-400 hover:border-blue-700/50'
                   }`}
                 >
-                  <div className="text-2xl mb-2">🔒</div>
+                  <div className="text-2xl mb-2">ðŸ”’</div>
                   <div className="text-sm font-medium">Offline</div>
                   <div className="text-xs text-gray-500 mt-1">No connection</div>
                 </button>
@@ -227,7 +227,7 @@ export default function SettingsPage() {
                       : 'bg-[#0a0e27] border-blue-900/30 text-gray-400 hover:border-blue-700/50'
                   }`}
                 >
-                  <div className="text-2xl mb-2">📊</div>
+                  <div className="text-2xl mb-2">ðŸ“Š</div>
                   <div className="text-sm font-medium">Rofex</div>
                   <div className="text-xs text-gray-500 mt-1">Derivatives</div>
                 </button>
@@ -240,7 +240,7 @@ export default function SettingsPage() {
                       : 'bg-[#0a0e27] border-blue-900/30 text-gray-400 hover:border-blue-700/50'
                   }`}
                 >
-                  <div className="text-2xl mb-2">🏦</div>
+                  <div className="text-2xl mb-2">ðŸ¦</div>
                   <div className="text-sm font-medium">Homebroker</div>
                   <div className="text-xs text-gray-500 mt-1">Equities</div>
                 </button>
@@ -310,7 +310,7 @@ export default function SettingsPage() {
                 </button>
 
                 <p className="text-xs text-gray-500 mt-3">
-                  🔒 Credentials are sent directly to the backend and not stored in browser.
+                  ðŸ”’ Credentials are sent directly to the backend and not stored in browser.
                 </p>
               </div>
             )}
@@ -333,7 +333,7 @@ export default function SettingsPage() {
                       <option value="124">Cohen</option>
                       <option value="125">Comafi</option>
                       <option value="121">Invertir Online</option>
-                      <option value="127">Itaú</option>
+                      <option value="127">ItaÃº</option>
                       <option value="134">Portfolio Personal</option>
                     </select>
                   </div>
@@ -383,7 +383,7 @@ export default function SettingsPage() {
                 </button>
 
                 <p className="text-xs text-gray-500 mt-3">
-                  🔒 Credentials are sent directly to the backend and not stored in browser.
+                  ðŸ”’ Credentials are sent directly to the backend and not stored in browser.
                 </p>
               </div>
             )}
@@ -395,14 +395,14 @@ export default function SettingsPage() {
                 
                 <div className="bg-blue-900/20 border border-blue-900/30 rounded p-4 mb-4">
                   <p className="text-sm text-blue-300 mb-2">
-                    ✓ No connection required
+                    âœ“ No connection required
                   </p>
                   <ul className="text-xs text-gray-400 space-y-1">
-                    <li>• Calculations run in your browser</li>
-                    <li>• Full Black-Scholes engine</li>
-                    <li>• All Greeks computed</li>
-                    <li>• Instant results</li>
-                    <li>• No market data needed</li>
+                    <li>â€¢ Calculations run in your browser</li>
+                    <li>â€¢ Full Black-Scholes engine</li>
+                    <li>â€¢ All Greeks computed</li>
+                    <li>â€¢ Instant results</li>
+                    <li>â€¢ No market data needed</li>
                   </ul>
                 </div>
 
@@ -420,7 +420,7 @@ export default function SettingsPage() {
         {/* Security Notice */}
         <div className="bg-amber-900/10 border border-amber-900/30 rounded-lg p-4 mt-6">
           <div className="flex gap-3">
-            <div className="text-2xl">🔐</div>
+            <div className="text-2xl">ðŸ”</div>
             <div>
               <h3 className="text-sm font-medium text-amber-400 mb-1">Security</h3>
               <p className="text-xs text-gray-400">
