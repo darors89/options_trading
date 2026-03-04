@@ -159,7 +159,7 @@ export default function StrategiesPage() {
 
         const result = await apiClient.analyzeStrategy(request);
         setAnalysisResult(result);
-        toast.success('✓ Analysis completed (Online)');
+        toast.success('âœ“ Analysis completed (Online)');
       } else {
         // OFFLINE MODE - Calculate in browser
         const offlineLegs: OfflineLeg[] = config.legs.map((leg, idx) => ({
@@ -180,7 +180,7 @@ export default function StrategiesPage() {
         );
 
         setAnalysisResult(result);
-        toast.success('✓ Analysis completed (Offline)');
+        toast.success('âœ“ Analysis completed (Offline)');
       }
     } catch (error: any) {
       console.error('Analysis error:', error);
@@ -189,7 +189,7 @@ export default function StrategiesPage() {
       toast.error(errorMsg);
       
       if (isOnlineMode) {
-        toast('💡 Try Offline Mode for instant analysis', { duration: 5000 });
+        toast('ðŸ’¡ Try Offline Mode for instant analysis', { duration: 5000 });
       }
     } finally {
       setIsAnalyzing(false);
@@ -222,7 +222,7 @@ export default function StrategiesPage() {
               Home
             </Link>
             <Link href="/settings" className="text-sm text-gray-400 hover:text-gray-300">
-              ⚙️ Settings
+              âš™ï¸ Settings
             </Link>
           </div>
 
@@ -244,7 +244,7 @@ export default function StrategiesPage() {
               />
             </button>
             {serverError && (
-              <span className="text-xs text-red-400">⚠️ {serverError}</span>
+              <span className="text-xs text-red-400">âš ï¸ {serverError}</span>
             )}
           </div>
         </div>
@@ -325,7 +325,7 @@ export default function StrategiesPage() {
                     <div className="bg-[#0a0e27] p-3 rounded border border-blue-900/20">
                       <div className="text-xs text-gray-500 mb-1">R/R</div>
                       <div className="text-xl font-light text-blue-300">
-                        {analysisResult.risk_reward_ratio?.toFixed(2) || '—'}
+                        {analysisResult.risk_reward_ratio?.toFixed(2) || 'â€”'}
                       </div>
                     </div>
                   </div>
@@ -500,9 +500,9 @@ export default function StrategiesPage() {
               <div className="mt-4 p-3 bg-blue-900/10 border border-blue-900/30 rounded">
                 <p className="text-xs text-gray-400">
                   {isOnlineMode ? (
-                    <>⚡ Online mode: Using backend API</>
+                    <>âš¡ Online mode: Using backend API</>
                   ) : (
-                    <>🔒 Offline mode: Calculations in browser</>
+                    <>ðŸ”’ Offline mode: Calculations in browser</>
                   )}
                 </p>
               </div>
